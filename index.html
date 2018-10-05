@@ -1,0 +1,232 @@
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Vitaldb exported</title>
+    <style>
+        body {
+            background-color: #eee;
+        }
+    </style>
+</head>
+
+
+<body>
+    <canvas id="II" width="1000" height="130">Your web browser does not support HTML5 Canvas.</canvas>
+    <canvas id="AVR" width="1000" height="130">Your web browser does not support HTML5 Canvas.</canvas>
+    <canvas id="V" width="1000" height="130">Your web browser does not support HTML5 Canvas.</canvas>
+    <canvas id="RESP" width="1000" height="130">Your web browser does not support HTML5 Canvas.</canvas>
+    <canvas id="PLETH" width="1000" height="130">Your web browser does not support HTML5 Canvas.</canvas>
+    <canvas id="ABP" width="1000" height="130">Your web browser does not support HTML5 Canvas.</canvas>
+    <canvas id="CVP" width="1000" height="130">Your web browser does not support HTML5 Canvas.</canvas>
+</body>
+<script src="https://code.jquery.com/jquery-3.3.1.min.js"
+        integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+        crossorigin="anonymous"></script>
+<script src="Queue.js"></script>
+<script>
+
+    class ContiguousData {
+        constructor(domCanvas, signame, fs, modulation, background_color, signal_color) {
+            this.domCanvas = domCanvas;
+            this.ctx = this.domCanvas.getContext('2d');
+
+            this.ctx.clearRect(0, 0, this.domCanvas.width, this.domCanvas.height);
+            this._fillRect(0, 0, this.domCanvas.width, this.domCanvas.height, background_color);
+
+            this.dataqueue = new Queue();
+
+            this._old_txt = null;
+
+            {
+                // Add signal name
+                this.ctx.textAlign = 'left';
+                this.ctx.textBaseline = 'alphabetic';
+                this.ctx.font = '20px arial';
+                this.ctx.fillStyle = signal_color;
+                this.ctx.fillText(signame, 4, 25);
+            }
+            {
+                // Add current date
+                setInterval(this._update_datetime.bind(this), 0.05*1000);
+            }
+
+            this.domCanvas = domCanvas;
+            this.signame = signame;
+            this.fs = fs;
+            this.modulation = modulation;
+            this.n = fs * modulation.max;
+
+            this.values = new Array(this.domCanvas.width).fill(null);
+            this.idx = 0;
+
+            this.drawing = {
+                ready: false,
+                data: new Array(this.n).fill(null),
+                color: signal_color,
+                n_diplay: this.n,
+                idx_display: 0,
+                axis: {
+                    label_x: "Time",
+                    label_y: "mV",
+                    ticks_x: 10,
+                    ticks_y: 5
+                },
+                margin: {top: 20, right: 100, bottom: 40, left: 70},
+                width: 900 - 30,
+                height: 200 - 10 - 20,
+                min_pixels_minor: 5,
+                min_pixels_major: 15,
+                show_grid_x: true,
+                show_grid_y: true,
+                current_mm: {min: 0, max: 0}
+            }; // For D3.js drawing
+
+            // Create modulation input
+
+
+            $("#" + this.div + "-conf").append(
+                'Modulation: <input id="' + this.div + '-conf-modulation" type="range"' +
+                '  min="' + this.modulation.min +
+                '" max="' + this.modulation.max +
+                '" value="' + this.modulation.value +
+                '" step="' + this.modulation.step + '"><br>' +
+                'Grid x: <input id="' + this.div + '-conf-grid-x" type="checkbox" checked><br>' +
+                'Grid y: <input id="' + this.div + '-conf-grid-y" type="checkbox" checked>');
+
+        }
+
+        _fillRect(x, y, w, h, color) {
+            this.ctx.fillStyle = color;
+            this.ctx.fillRect(x, y, w, h);
+        }
+
+        _update_datetime() {
+            this.ctx.textAlign = 'left';
+            this.ctx.textBaseline = 'alphabetic';
+            this.ctx.font = '20px arial';
+
+            if (this._old_txt) {
+                const txt_width = this.ctx.measureText(this._old_txt).width;
+                this._fillRect(this.domCanvas.width/2-(txt_width/2), 10, txt_width, 16, '#000');
+            }
+
+            this.ctx.fillStyle = '#fff';
+            this._old_txt = new Date(Date.now()).toLocaleDateString('fr-FR') + ' ' + new Date(Date.now()).toLocaleTimeString('fr-FR');
+            const txt_width = this.ctx.measureText(this._old_txt).width;
+            this.ctx.fillText(this._old_txt, this.domCanvas.width/2-(txt_width/2), 25);
+        }
+
+
+        _normalize(values, y_0, y_1) {
+            const values_max = Math.max.apply(null, values);
+            const values_min = Math.min.apply(null, values);
+            const ratio = (y_1-y_0)/(values_max-values_min);
+            const result = values.map(x => ((x + (-values_min)) * ratio) + y_0);
+            console.assert(Math.max.apply(null, result) <= y_1 && Math.min.apply(null, result) >= y_0);
+            return result;
+        }
+
+        consume_data() {
+            let item = this.dataqueue.dequeue();
+            const new_idx = (this.idx + 1) % this.domCanvas.width;
+            if (this.prev_val != null)
+            {
+                // First clear vertical block of width=10 at new_idx
+                this._fillRect(new_idx, 30, 10, this.domCanvas.height-31, "#000");
+            }
+            {
+                // Now draw the new waveform value
+                this.ctx.strokeStyle = this.drawing.color;
+                this.ctx.lineWidth = 1;
+                // Add signal
+                this.ctx.beginPath();
+                if (this.idx < new_idx)
+                    this.ctx.moveTo(this.idx, this.prev_val);
+                else
+                    this.ctx.moveTo(new_idx, this.prev_val);
+                this.ctx.lineTo(new_idx, item);
+                this.ctx.stroke();
+            }
+            this.prev_val = item;
+            this.idx = new_idx;
+        }
+
+        add_data(values, update_graph=false) {
+            console.log("Adding data...");
+            const y_0 = 30;
+            const y_1 = this.domCanvas.height;
+            const vals = this._normalize(values, y_0, y_1);
+
+            for (let i = 0; i < vals.length; i++) {
+                this.dataqueue.enqueue(vals[i]);
+            }
+
+        }
+    }
+
+    const sig_colors = {
+        "II": "#00FF00",
+        "AVR": "#00FF00",
+        "V": "#00FF00",
+        "RESP": "#FFFF00",
+        "PLETH": "#82CEFC",
+        "ABP": "#FF0000",
+        "CVP": "#FAA804",
+    };
+
+    let request = new XMLHttpRequest();
+    request.open('GET', 'test_data.json', false);  // `false` makes the request synchronous
+    request.send(null);
+
+    var sig_name = null;
+    var values = null;
+    if (request.status === 200) {
+        const data = JSON.parse(request.responseText);
+        sig_name = data.sig_name;
+        values = data.data;
+    }
+    console.log(sig_name.length);
+    console.assert(sig_name.length == values.length);
+
+
+
+    function display_signal(values, freq, x_0, x_1, y_0, y_1, color) {
+        
+    }
+
+
+    let fs = 125;
+    // Modulation defines the number of seconds of data to display
+    let modulation = {
+        min: 5,
+        max: 100,
+        value: 20,
+        step: 5
+    };
+    $(document).ready(function() {
+        const blocks = [];
+        for (let i = 0; i < sig_name.length; i++) {
+            const signal_name = sig_name[i];
+
+            const domCanvas = document.getElementById(signal_name);
+            console.log(domCanvas);
+            console.assert(domCanvas !== null);
+            let newdata = new ContiguousData(domCanvas, signal_name, fs, modulation, "#000", sig_colors[signal_name]);
+
+            newdata.add_data(values[i]);
+            blocks.push(newdata);
+        }
+
+        function consume_data_all_blocks() {
+            console.log("consuming...");
+            for (let i = 0; i < sig_name.length; i++) {
+                this[i].consume_data();
+            }
+        }
+
+        setInterval(consume_data_all_blocks.bind(blocks), 4);
+    })
+</script>
+
+</html>
