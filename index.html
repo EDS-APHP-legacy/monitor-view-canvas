@@ -114,6 +114,10 @@
             this.idx = new_idx;
         }
 
+        has_data() {
+            return this.dataqueue.isEmpty();
+        }
+
         add_data(values, update_graph=false) {
             console.log("Adding data...");
             const y_0 = 30;
@@ -167,6 +171,8 @@
 
         function consume_data_all_blocks() {
             for (let i = 0; i < sig_name.length; i++) {
+                if (this[i].has_data())
+                    this[i].add_data(values[i]);
                 this[i].consume_data();
             }
         }
