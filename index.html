@@ -20,9 +20,6 @@
     <canvas id="ABP" width="1000" height="130">Your web browser does not support HTML5 Canvas.</canvas>
     <canvas id="CVP" width="1000" height="130">Your web browser does not support HTML5 Canvas.</canvas>
 </body>
-<script src="https://code.jquery.com/jquery-3.3.1.min.js"
-        integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
-        crossorigin="anonymous"></script>
 <script src="Queue.js"></script>
 <script>
 
@@ -155,7 +152,7 @@
     console.log(sig_name.length);
     console.assert(sig_name.length == values.length);
 
-    $(document).ready(function() {
+    (function() {
         const blocks = [];
         for (let i = 0; i < sig_name.length; i++) {
             const signal_name = sig_name[i];
@@ -178,7 +175,7 @@
         }
 
         setInterval(consume_data_all_blocks.bind(blocks), 16);
-    })
+    })();
 </script>
 
 </html>
