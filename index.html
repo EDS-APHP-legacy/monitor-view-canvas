@@ -10,7 +10,6 @@
     </style>
 </head>
 
-
 <body>
     <canvas id="II" width="1000" height="130">Your web browser does not support HTML5 Canvas.</canvas>
     <canvas id="AVR" width="1000" height="130">Your web browser does not support HTML5 Canvas.</canvas>
@@ -20,6 +19,7 @@
     <canvas id="ABP" width="1000" height="130">Your web browser does not support HTML5 Canvas.</canvas>
     <canvas id="CVP" width="1000" height="130">Your web browser does not support HTML5 Canvas.</canvas>
 </body>
+
 <script src="Queue.js"></script>
 <script>
 
@@ -53,6 +53,10 @@
             }
 
             this.idx = 0;
+
+            this.domCanvas.addEventListener('click', () => {
+               console.log('canvas click');
+            });
         }
 
         _fillRect(x, y, w, h, color) {
@@ -112,7 +116,7 @@
         }
 
         has_data() {
-            return this.dataqueue.isEmpty();
+            return !this.dataqueue.isEmpty();
         }
 
         add_data(values, update_graph=false) {
@@ -168,7 +172,7 @@
 
         function consume_data_all_blocks() {
             for (let i = 0; i < sig_name.length; i++) {
-                if (this[i].has_data())
+                if (!this[i].has_data())
                     this[i].add_data(values[i]);
                 this[i].consume_data();
             }
